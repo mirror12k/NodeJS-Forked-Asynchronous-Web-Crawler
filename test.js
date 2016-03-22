@@ -11,8 +11,7 @@ TestCrawler.prototype = Object.create(AsyncCrawler.prototype);
 
 
 TestCrawler.prototype.initializeMaster = function() {
-	this.scheduleJob({ type: 'request', request: { method: 'GET', url: 'https://example.org/' } });
-	// this.scheduleJob({ type: 'request', request: { method: 'GET', url: 'https://www.yahoo.com/' } });
+	this.get('https://example.org/');
 };
 
 TestCrawler.prototype.process = function(response) {

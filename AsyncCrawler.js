@@ -135,13 +135,28 @@ AsyncCrawler.prototype.output = function(data) {
 // state-ambiguous functions
 
 AsyncCrawler.prototype.scheduleRequest = function(request, options) {
-	this.workerSendMessage({ type: 'schedule_request', options: options, request: {
+	if (this.isMaster) {
+		var request = {
 			method: request.method,
 			url: request.path.toString(),
 			protocol: request.protocol,
 			headers: request.headers,
 			body: request.body,
-	} });
+			options: options,
+		};
+		request = this.processRequest(request);
+		if (request !== undefined)
+			this.scheduleJob({ type: 'request', request: request });
+	} else {
+		this.workerSendMessage({ type: 'schedule_request', request: {
+			method: request.method,
+			url: request.path.toString(),
+			protocol: request.protocol,
+			headers: request.headers,
+			body: request.body,
+			options: options,
+		} });
+	}
 };
 
 AsyncCrawler.prototype.head = function(url, options) {
