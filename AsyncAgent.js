@@ -108,7 +108,7 @@ AsyncAgent.prototype.request = function (request, options) {
 	if (options.chunked) {
 		res.once('header', function (response) {
 			var compression = response.getHeader('content-encoding');
-			if (compression !== undefined) {
+			if (compression !== undefined && request.method !== 'HEAD') {
 				if (self.compressors[compression] === undefined) // verify that the decompressor exists
 					throw new AsyncAgent.HTTPError("error: no such compression method available: '"+compression+"'");
 				// create the stream decompressor
@@ -200,7 +200,7 @@ AsyncAgent.prototype.parseResponse = function(emitter, options, request, respons
 	response.request = request;
 
 	var compression = response.getHeader('content-encoding');
-	if (compression !== undefined && ! options.chunked) {
+	if (compression !== undefined && ! options.chunked && request.method !== 'HEAD') {
 		if (this.compressors[compression] === undefined) // verify that the decompressor exists
 			throw new AsyncAgent.HTTPError("error: no such compression method available: '"+compression+"'");
 		else
