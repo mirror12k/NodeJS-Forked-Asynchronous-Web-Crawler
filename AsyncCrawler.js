@@ -16,6 +16,8 @@ function AsyncCrawler (options) {
 		this.workersAvailable = [];
 
 		this.startWorkers();
+
+		this.initializeMaster();
 	} else {
 		this.isMaster = false;
 		process.on('message', this.workerRecieveJob.bind(this));
@@ -36,10 +38,6 @@ AsyncCrawler.prototype.startWorkers = function() {
 		var worker = this.workers[i];
 		worker.on('message', this.recieveWorkerMessage.bind(this));
 	}
-	this.scheduleJob({ type: 'request', request: { method: 'GET', url: 'https://www.yahoo.com/' } });
-	this.scheduleJob({ type: 'request', request: { method: 'GET', url: 'https://www.yahoo.com/' } });
-	this.scheduleJob({ type: 'request', request: { method: 'GET', url: 'https://www.yahoo.com/' } });
-	this.scheduleJob({ type: 'request', request: { method: 'GET', url: 'https://www.yahoo.com/' } });
 };
 
 
@@ -48,8 +46,10 @@ AsyncCrawler.prototype.recieveWorkerMessage = function(msg) {
 		this.produceOutput(msg.data);
 	} else if (msg.type === 'worker_ready') {
 		this.workerReady(msg.id);
-	} else if (msg.type === 'schedule_job') {
-		this.scheduleJob(msg.job);
+	} else if (msg.type === 'schedule_request') {
+		var request = this.processRequest(msg.request);
+		if (request !== undefined)
+			this.scheduleJob({ type: 'request', request: request });
 	} else {
 		console.log("uknown type of worker msg: ", msg.type);
 	}
@@ -66,6 +66,10 @@ AsyncCrawler.prototype.workerReady = function(workerId) {
 		this.workersAvailable.push(cluster.workers[workerId]);
 };
 
+AsyncCrawler.prototype.processRequest = function(request) {
+	return request;	
+};
+
 
 AsyncCrawler.prototype.scheduleJob = function(job) {
 	if (this.workersAvailable.length > 0) // if we have a worker available, send the job immediately
@@ -73,6 +77,9 @@ AsyncCrawler.prototype.scheduleJob = function(job) {
 	else // otherwise add it to the queue of waiting jobs
 		this.jobQueue.push(job);
 };
+
+// abstract method which subclasses can override to implement intial-setup functionality
+AsyncCrawler.prototype.initializeMaster = function() {};
 
 
 
@@ -85,7 +92,7 @@ AsyncCrawler.prototype.workerSendMessage = function(obj) {
 };
 
 AsyncCrawler.prototype.workerRecieveJob = function(job) {
-	console.log("worker got message: ", job);
+	// console.log("debug worker got message: ", job);
 	if (job.type === 'request') {
 		var request = new AsyncAgent.HTTPRequest(
 			job.request.method || 'GET',
@@ -94,7 +101,7 @@ AsyncCrawler.prototype.workerRecieveJob = function(job) {
 			job.request.headers,
 			job.request.body
 		);
-		this.workerHookRequest(this.request(request, job.options));
+		this.workerHookRequest(this.request(request, job.request.options));
 	} else {
 		console.log("unknown job type:", job.type);
 	}
@@ -104,21 +111,54 @@ AsyncCrawler.prototype.workerRecieveJob = function(job) {
 AsyncCrawler.prototype.workerHookRequest = function (emitter) {
 	var self = this;
 	emitter.on('response', function (response) {
-		self.processResponse(response);
+		self.process(response);
 		self.workerSendMessage({ type: 'worker_ready', id: cluster.worker.id })
 	});
 };
 
-AsyncCrawler.prototype.processResponse = function(res) {
+AsyncCrawler.prototype.process = function(res) {
 	console.log('unprocessed response');
 	this.workerSendMessage({ type: 'output', data: res.code});
 };
 
 
-
-
 AsyncCrawler.prototype.output = function(data) {
 	this.workerSendMessage({ type: 'output', data: data });
 };
+
+
+
+
+
+
+
+// state-ambiguous functions
+
+AsyncCrawler.prototype.scheduleRequest = function(request, options) {
+	this.workerSendMessage({ type: 'schedule_request', options: options, request: {
+			method: request.method,
+			url: request.path.toString(),
+			protocol: request.protocol,
+			headers: request.headers,
+			body: request.body,
+	} });
+};
+
+AsyncCrawler.prototype.head = function(url, options) {
+	options = options || {};
+	return this.scheduleRequest(new AsyncAgent.HTTPRequest('HEAD', url, 'HTTP/1.1', options.headers, options.body), options);
+};
+
+AsyncCrawler.prototype.get = function(url, options) {
+	options = options || {};
+	return this.scheduleRequest(new AsyncAgent.HTTPRequest('GET', url, 'HTTP/1.1', options.headers, options.body), options);
+};
+
+AsyncCrawler.prototype.post = function(url, options) {
+	options = options || {};
+	return this.scheduleRequest(new AsyncAgent.HTTPRequest('POST', url, 'HTTP/1.1', options.headers, options.body), options);
+};
+
+
 
 module.exports = AsyncCrawler;
