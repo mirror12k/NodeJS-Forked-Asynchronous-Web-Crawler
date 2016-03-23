@@ -15,6 +15,11 @@ function AsyncCrawler (options) {
 		this.jobQueue = [];
 		this.workersAvailable = [];
 
+		if (options.autoshutdown === undefined)
+			this.autoshutdown = true;
+		else
+			this.autoshutdown = options.autoshutdown;
+
 		this.startWorkers();
 
 		this.initializeMaster();
@@ -63,18 +68,24 @@ AsyncCrawler.prototype.produceOutput = function(output) {
 };
 
 AsyncCrawler.prototype.workerReady = function(workerId) {
-	if (this.jobQueue.length > 0) // if we have a job ready, send it
-		cluster.workers[workerId].send(this.jobQueue.shift());
-	else // otherwise add it to the queue of available workers
-		this.workersAvailable.push(cluster.workers[workerId]);
+	this.workersAvailable.push(cluster.workers[workerId]);
+	this.checkJobs();
 };
 
 
 AsyncCrawler.prototype.scheduleJob = function(job) {
-	if (this.workersAvailable.length > 0) // if we have a worker available, send the job immediately
-		this.workersAvailable.shift().send(job);
-	else // otherwise add it to the queue of waiting jobs
-		this.jobQueue.push(job);
+	this.jobQueue.push(job);
+	this.checkJobs();
+};
+
+
+AsyncCrawler.prototype.checkJobs = function() {
+	while (this.workersAvailable.length > 0 && this.jobQueue.length > 0) {
+		this.workersAvailable.shift().send(this.jobQueue.shift());
+	}
+	if (this.autoshutdown && this.workersAvailable.length == this.workers.length && this.jobQueue.length == 0) {
+		this.shutdown();
+	}
 };
 
 AsyncCrawler.prototype.masterShutdown = function() {
