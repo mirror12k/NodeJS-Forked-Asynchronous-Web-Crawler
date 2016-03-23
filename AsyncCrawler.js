@@ -28,6 +28,7 @@ AsyncCrawler.prototype = Object.create(AsyncAgent.prototype);
 
 
 
+
 // master methods
 
 AsyncCrawler.prototype.startWorkers = function() {
@@ -50,13 +51,15 @@ AsyncCrawler.prototype.recieveWorkerMessage = function(msg) {
 		var request = this.processRequest(msg.request);
 		if (request !== undefined)
 			this.scheduleJob({ type: 'request', request: request });
+	} else if (msg.type === 'shutdown') {
+		this.shutdown();
 	} else {
 		console.log("uknown type of worker msg: ", msg.type);
 	}
 };
 
 AsyncCrawler.prototype.produceOutput = function(output) {
-	console.log("output:", output);
+	console.log(JSON.stringify(output));
 };
 
 AsyncCrawler.prototype.workerReady = function(workerId) {
@@ -66,16 +69,27 @@ AsyncCrawler.prototype.workerReady = function(workerId) {
 		this.workersAvailable.push(cluster.workers[workerId]);
 };
 
-AsyncCrawler.prototype.processRequest = function(request) {
-	return request;	
-};
-
 
 AsyncCrawler.prototype.scheduleJob = function(job) {
 	if (this.workersAvailable.length > 0) // if we have a worker available, send the job immediately
 		this.workersAvailable.shift().send(job);
 	else // otherwise add it to the queue of waiting jobs
 		this.jobQueue.push(job);
+};
+
+AsyncCrawler.prototype.masterShutdown = function() {
+	this.workers.forEach(function (worker) {
+		worker.kill();
+	});
+	this.workers = [];
+	this.jobQueue = [];
+	this.workersAvailable = [];
+};
+
+// method for processing requests that can be overloaded by subclasses
+// whatever request is returned, will be executed, or nothing if undefined is returned
+AsyncCrawler.prototype.processRequest = function(request) {
+	return request;	
 };
 
 // abstract method which subclasses can override to implement intial-setup functionality
@@ -182,6 +196,15 @@ AsyncCrawler.prototype.get = function(url, options) {
 AsyncCrawler.prototype.post = function(url, options) {
 	options = options || {};
 	return this.scheduleRequest(new AsyncAgent.HTTPRequest('POST', url, 'HTTP/1.1', options.headers, options.body), options);
+};
+
+
+AsyncCrawler.prototype.shutdown = function() {
+	if (this.isMaster) {
+		this.masterShutdown();
+	} else {
+		this.workerSendMessage({ type: 'shutdown' });
+	}
 };
 
 

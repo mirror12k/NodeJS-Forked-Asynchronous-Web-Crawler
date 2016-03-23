@@ -27,7 +27,8 @@ TestCrawler.prototype.processMore = function(response, meta) {
 	this.output({ more_status: response.code, count: meta.count });
 	if (meta.count > 0)
 		this.get("https://example.org/", { crawler_callback: 'processMore', meta: { count: meta.count - 1 } });
-
+	else
+		this.shutdown();
 };
 
 // var ua = new AsyncCrawler();
