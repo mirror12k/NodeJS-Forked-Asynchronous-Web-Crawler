@@ -3,7 +3,7 @@ var cluster = require('cluster');
 
 var AsyncAgent = require('./AsyncAgent');
 
-function AsyncCrawler (options) {
+function ForkCrawler (options) {
 	options = options || {};
 	AsyncAgent.call(this, options);
 
@@ -29,14 +29,14 @@ function AsyncCrawler (options) {
 		this.workerSendMessage({ type: 'worker_ready', id: cluster.worker.id });
 	}
 }
-AsyncCrawler.prototype = Object.create(AsyncAgent.prototype);
+ForkCrawler.prototype = Object.create(AsyncAgent.prototype);
 
 
 
 
 // master methods
 
-AsyncCrawler.prototype.startWorkers = function() {
+ForkCrawler.prototype.startWorkers = function() {
 	for (var i = 0; i < this.worker_count; i++) {
 		this.workers.push(cluster.fork());
 	}
@@ -47,7 +47,7 @@ AsyncCrawler.prototype.startWorkers = function() {
 };
 
 
-AsyncCrawler.prototype.recieveWorkerMessage = function(msg) {
+ForkCrawler.prototype.recieveWorkerMessage = function(msg) {
 	if (msg.type === 'output') {
 		this.produceOutput(msg.data);
 	} else if (msg.type === 'worker_ready') {
@@ -65,23 +65,23 @@ AsyncCrawler.prototype.recieveWorkerMessage = function(msg) {
 	}
 };
 
-AsyncCrawler.prototype.produceOutput = function(output) {
+ForkCrawler.prototype.produceOutput = function(output) {
 	console.log(JSON.stringify(output));
 };
 
-AsyncCrawler.prototype.workerReady = function(workerId) {
+ForkCrawler.prototype.workerReady = function(workerId) {
 	this.workersAvailable.push(cluster.workers[workerId]);
 	this.checkJobs();
 };
 
 
-AsyncCrawler.prototype.scheduleJob = function(job) {
+ForkCrawler.prototype.scheduleJob = function(job) {
 	this.jobQueue.push(job);
 	this.checkJobs();
 };
 
 
-AsyncCrawler.prototype.checkJobs = function() {
+ForkCrawler.prototype.checkJobs = function() {
 	while (this.workersAvailable.length > 0 && this.jobQueue.length > 0) {
 		this.workersAvailable.shift().send(this.jobQueue.shift());
 	}
@@ -90,7 +90,7 @@ AsyncCrawler.prototype.checkJobs = function() {
 	}
 };
 
-AsyncCrawler.prototype.masterShutdown = function() {
+ForkCrawler.prototype.masterShutdown = function() {
 	this.workers.forEach(function (worker) {
 		worker.kill();
 	});
@@ -101,12 +101,12 @@ AsyncCrawler.prototype.masterShutdown = function() {
 
 // method for processing requests that can be overloaded by subclasses
 // whatever request is returned, will be executed, or nothing if undefined is returned
-AsyncCrawler.prototype.processRequest = function(request) {
+ForkCrawler.prototype.processRequest = function(request) {
 	return request;	
 };
 
 // abstract method which subclasses can override to implement intial-setup functionality
-AsyncCrawler.prototype.initializeMaster = function() {};
+ForkCrawler.prototype.initializeMaster = function() {};
 
 
 
@@ -114,11 +114,11 @@ AsyncCrawler.prototype.initializeMaster = function() {};
 
 // worker methods
 
-AsyncCrawler.prototype.workerSendMessage = function(obj) {
+ForkCrawler.prototype.workerSendMessage = function(obj) {
 	process.send(obj);
 };
 
-AsyncCrawler.prototype.workerRecieveJob = function(job) {
+ForkCrawler.prototype.workerRecieveJob = function(job) {
 	// console.log("debug worker got message: ", job);
 	if (job.type === 'request') {
 		var request = new AsyncAgent.HTTPRequest(
@@ -135,7 +135,7 @@ AsyncCrawler.prototype.workerRecieveJob = function(job) {
 };
 
 
-AsyncCrawler.prototype.workerHookRequest = function (emitter, options) {
+ForkCrawler.prototype.workerHookRequest = function (emitter, options) {
 	var self = this;
 	emitter.on('response', function (response) {
 		if (options.crawler_callback === undefined)
@@ -146,17 +146,17 @@ AsyncCrawler.prototype.workerHookRequest = function (emitter, options) {
 	});
 };
 
-AsyncCrawler.prototype.process = function(res, meta) {
+ForkCrawler.prototype.process = function(res, meta) {
 	console.log('unprocessed response');
 	this.workerSendMessage({ type: 'output', data: res.code });
 };
 
 
-AsyncCrawler.prototype.output = function(data) {
+ForkCrawler.prototype.output = function(data) {
 	this.workerSendMessage({ type: 'output', data: data });
 };
 
-AsyncCrawler.prototype.execute = function(name, args) {
+ForkCrawler.prototype.execute = function(name, args) {
 	this.workerSendMessage({ type: 'execute', name: name, args: args });
 };
 
@@ -173,7 +173,7 @@ AsyncCrawler.prototype.execute = function(name, args) {
  *    - crawler_callback - an optional string naming a method of the crawler object which will be called, defaults to the 'process' method
  *    - meta - an optional object which will be passed as the second argument to the crawler callback
  */
-AsyncCrawler.prototype.scheduleRequest = function(request, options) {
+ForkCrawler.prototype.scheduleRequest = function(request, options) {
 	if (this.isMaster) {
 		var request = {
 			method: request.method,
@@ -198,23 +198,23 @@ AsyncCrawler.prototype.scheduleRequest = function(request, options) {
 	}
 };
 
-AsyncCrawler.prototype.head = function(url, options) {
+ForkCrawler.prototype.head = function(url, options) {
 	options = options || {};
 	return this.scheduleRequest(new AsyncAgent.HTTPRequest('HEAD', url, 'HTTP/1.1', options.headers, options.body), options);
 };
 
-AsyncCrawler.prototype.get = function(url, options) {
+ForkCrawler.prototype.get = function(url, options) {
 	options = options || {};
 	return this.scheduleRequest(new AsyncAgent.HTTPRequest('GET', url, 'HTTP/1.1', options.headers, options.body), options);
 };
 
-AsyncCrawler.prototype.post = function(url, options) {
+ForkCrawler.prototype.post = function(url, options) {
 	options = options || {};
 	return this.scheduleRequest(new AsyncAgent.HTTPRequest('POST', url, 'HTTP/1.1', options.headers, options.body), options);
 };
 
 
-AsyncCrawler.prototype.shutdown = function() {
+ForkCrawler.prototype.shutdown = function() {
 	if (this.isMaster) {
 		this.masterShutdown();
 	} else {
@@ -224,4 +224,4 @@ AsyncCrawler.prototype.shutdown = function() {
 
 
 
-module.exports = AsyncCrawler;
+module.exports = ForkCrawler;

@@ -1,13 +1,13 @@
 
 
-AsyncCrawler = require("./AsyncCrawler");
+ForkCrawler = require("./ForkCrawler");
 
 
 
 function TestCrawler (options) {
-	AsyncCrawler.call(this, options);
+	ForkCrawler.call(this, options);
 }
-TestCrawler.prototype = Object.create(AsyncCrawler.prototype);
+TestCrawler.prototype = Object.create(ForkCrawler.prototype);
 
 
 TestCrawler.prototype.initializeMaster = function() {
@@ -28,8 +28,6 @@ TestCrawler.prototype.processMore = function(response, meta) {
 	// else
 	// 	this.shutdown();
 };
-
-// var ua = new AsyncCrawler();
 
 
 module.exports = TestCrawler;

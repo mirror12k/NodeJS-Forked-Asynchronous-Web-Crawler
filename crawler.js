@@ -1,7 +1,8 @@
 
 var cluster = require('cluster');
 
-var AsyncCrawler = require('./AsyncCrawler');
+// ensure that we have the module ready
+var ForkCrawler = require('./ForkCrawler');
 
 
 if (process.argv.length < 3) {
