@@ -101,22 +101,25 @@ AsyncCrawler.prototype.workerRecieveJob = function(job) {
 			job.request.headers,
 			job.request.body
 		);
-		this.workerHookRequest(this.request(request, job.request.options));
+		this.workerHookRequest(this.request(request, job.request.options), job.request.options);
 	} else {
 		console.log("unknown job type:", job.type);
 	}
 };
 
 
-AsyncCrawler.prototype.workerHookRequest = function (emitter) {
+AsyncCrawler.prototype.workerHookRequest = function (emitter, options) {
 	var self = this;
 	emitter.on('response', function (response) {
-		self.process(response);
+		if (options.crawler_callback === undefined)
+			self.process(response, options.meta);
+		else
+			self[options.crawler_callback](response, options.meta);
 		self.workerSendMessage({ type: 'worker_ready', id: cluster.worker.id })
 	});
 };
 
-AsyncCrawler.prototype.process = function(res) {
+AsyncCrawler.prototype.process = function(res, meta) {
 	console.log('unprocessed response');
 	this.workerSendMessage({ type: 'output', data: res.code});
 };
@@ -134,6 +137,13 @@ AsyncCrawler.prototype.output = function(data) {
 
 // state-ambiguous functions
 
+/**
+ * similar to AsyncAgent.request, but instead of requesting, it schedules a job for a worker to perform
+ * options - optional object with settings which will be passed to AsyncAgent.request
+ * additional options:
+ *    - crawler_callback - an optional string naming a method of the crawler object which will be called, defaults to the 'process' method
+ *    - meta - an optional object which will be passed as the second argument to the crawler callback
+ */
 AsyncCrawler.prototype.scheduleRequest = function(request, options) {
 	if (this.isMaster) {
 		var request = {
