@@ -58,6 +58,8 @@ AsyncCrawler.prototype.recieveWorkerMessage = function(msg) {
 			this.scheduleJob({ type: 'request', request: request });
 	} else if (msg.type === 'shutdown') {
 		this.shutdown();
+	} else if (msg.type === 'execute') {
+		this[msg.name].apply(this, msg.args);
 	} else {
 		console.log("uknown type of worker msg: ", msg.type);
 	}
@@ -146,7 +148,7 @@ AsyncCrawler.prototype.workerHookRequest = function (emitter, options) {
 
 AsyncCrawler.prototype.process = function(res, meta) {
 	console.log('unprocessed response');
-	this.workerSendMessage({ type: 'output', data: res.code});
+	this.workerSendMessage({ type: 'output', data: res.code });
 };
 
 
@@ -154,7 +156,9 @@ AsyncCrawler.prototype.output = function(data) {
 	this.workerSendMessage({ type: 'output', data: data });
 };
 
-
+AsyncCrawler.prototype.execute = function(name, args) {
+	this.workerSendMessage({ type: 'execute', name: name, args: args });
+};
 
 
 
